@@ -68,8 +68,8 @@ jobs:
                   applicationId 'ir.liyona.vendorpanel'
                   minSdk 23
                   targetSdk 35
-                  versionCode 1
-                  versionName '1.0.0'
+                  versionCode 2
+                  versionName '1.1.0'
               }
 
               compileOptions {
@@ -89,15 +89,28 @@ jobs:
           <resources>
               <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:windowNoTitle">true</item>
-                  <item name="android:statusBarColor">#031B45</item>
-                  <item name="android:navigationBarColor">#031B45</item>
+                  <item name="android:statusBarColor">#061D47</item>
+                  <item name="android:navigationBarColor">#061D47</item>
                   <item name="android:windowLightStatusBar">false</item>
               </style>
           </resources>
           EOF
 
+          cat > app/src/main/res/drawable/splash_bg.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <gradient
+                  android:angle="135"
+                  android:startColor="#031B45"
+                  android:centerColor="#0757C8"
+                  android:endColor="#03235E" />
+          </shape>
+          EOF
+
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
               <uses-permission android:name="android.permission.INTERNET" />
 
               <application
@@ -111,11 +124,14 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
+
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
+
                   </activity>
+
               </application>
           </manifest>
           EOF
@@ -124,15 +140,21 @@ jobs:
           package ir.liyona.vendorpanel;
 
           import android.app.Activity;
+          import android.graphics.Color;
           import android.os.Bundle;
+          import android.view.Gravity;
           import android.view.View;
           import android.view.ViewGroup;
+          import android.view.WindowInsets;
           import android.webkit.CookieManager;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
+          import android.widget.ImageView;
+          import android.widget.LinearLayout;
           import android.widget.ProgressBar;
+          import android.widget.TextView;
 
           public class MainActivity extends Activity {
 
@@ -140,36 +162,196 @@ jobs:
                       "https://liyona.ir/vendor-dashboard/";
 
               private WebView webView;
+              private View splash;
+              private View pageLoader;
+              private boolean firstLoad = true;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
+                  getWindow().setStatusBarColor(Color.rgb(6, 29, 71));
+                  getWindow().setNavigationBarColor(Color.rgb(6, 29, 71));
+
+                  buildUI();
+                  setupInsets();
+                  setupWebView();
+
+                  webView.loadUrl(URL);
+              }
+
+              private void buildUI() {
+
                   FrameLayout root = new FrameLayout(this);
+                  root.setBackgroundColor(Color.WHITE);
 
                   webView = new WebView(this);
                   webView.setVisibility(View.INVISIBLE);
 
                   root.addView(
-                      webView,
-                      new FrameLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT,
-                          ViewGroup.LayoutParams.MATCH_PARENT
-                      )
+                          webView,
+                          new FrameLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.MATCH_PARENT
+                          )
                   );
 
-                  ProgressBar loader = new ProgressBar(this);
+                  pageLoader = createPageLoader();
+                  pageLoader.setVisibility(View.GONE);
 
                   FrameLayout.LayoutParams loaderParams =
-                      new FrameLayout.LayoutParams(100, 100);
+                          new FrameLayout.LayoutParams(dp(150), dp(90));
 
-                  loaderParams.gravity = android.view.Gravity.CENTER;
+                  loaderParams.gravity = Gravity.CENTER;
 
-                  root.addView(loader, loaderParams);
+                  root.addView(pageLoader, loaderParams);
+
+                  splash = createSplash();
+
+                  root.addView(
+                          splash,
+                          new FrameLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.MATCH_PARENT
+                          )
+                  );
 
                   setContentView(root);
+              }
+
+              private View createSplash() {
+
+                  LinearLayout layout = new LinearLayout(this);
+
+                  layout.setOrientation(LinearLayout.VERTICAL);
+                  layout.setGravity(Gravity.CENTER);
+                  layout.setPadding(dp(30), dp(30), dp(30), dp(30));
+                  layout.setBackgroundResource(R.drawable.splash_bg);
+
+                  ImageView logo = new ImageView(this);
+                  logo.setImageResource(R.drawable.icon);
+                  logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+                  LinearLayout.LayoutParams logoParams =
+                          new LinearLayout.LayoutParams(dp(130), dp(130));
+
+                  logoParams.bottomMargin = dp(25);
+
+                  layout.addView(logo, logoParams);
+
+                  TextView title = new TextView(this);
+                  title.setText("پنل فروشندگان لیونا");
+                  title.setTextColor(Color.WHITE);
+                  title.setTextSize(25);
+                  title.setGravity(Gravity.CENTER);
+
+                  layout.addView(title);
+
+                  TextView sub = new TextView(this);
+                  sub.setText("مدیریت فروشگاه، ساده و سریع");
+                  sub.setTextColor(0xCCFFFFFF);
+                  sub.setTextSize(14);
+                  sub.setGravity(Gravity.CENTER);
+
+                  LinearLayout.LayoutParams subParams =
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          );
+
+                  subParams.topMargin = dp(8);
+                  subParams.bottomMargin = dp(30);
+
+                  layout.addView(sub, subParams);
+
+                  ProgressBar progress = new ProgressBar(this);
+
+                  LinearLayout.LayoutParams progressParams =
+                          new LinearLayout.LayoutParams(dp(50), dp(50));
+
+                  progressParams.bottomMargin = dp(15);
+
+                  layout.addView(progress, progressParams);
+
+                  TextView loading = new TextView(this);
+                  loading.setText("در حال ورود به پنل...");
+                  loading.setTextColor(Color.WHITE);
+                  loading.setTextSize(13);
+
+                  layout.addView(loading);
+
+                  logo.animate()
+                          .scaleX(1.08f)
+                          .scaleY(1.08f)
+                          .alpha(0.8f)
+                          .setDuration(900)
+                          .withEndAction(() ->
+                                  logo.animate()
+                                          .scaleX(1f)
+                                          .scaleY(1f)
+                                          .alpha(1f)
+                                          .setDuration(900)
+                                          .start()
+                          )
+                          .start();
+
+                  return layout;
+              }
+
+              private View createPageLoader() {
+
+                  LinearLayout box = new LinearLayout(this);
+
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  box.setGravity(Gravity.CENTER);
+                  box.setPadding(dp(15), dp(15), dp(15), dp(15));
+                  box.setBackgroundColor(0xEEFFFFFF);
+                  box.setElevation(dp(12));
+
+                  ProgressBar progress = new ProgressBar(this);
+
+                  LinearLayout.LayoutParams progressParams =
+                          new LinearLayout.LayoutParams(dp(38), dp(38));
+
+                  progressParams.bottomMargin = dp(8);
+
+                  box.addView(progress, progressParams);
+
+                  TextView text = new TextView(this);
+
+                  text.setText("در حال بارگذاری...");
+                  text.setTextColor(Color.rgb(3, 27, 69));
+                  text.setTextSize(12);
+
+                  box.addView(text);
+
+                  return box;
+              }
+
+              private void setupInsets() {
+
+                  View content = findViewById(android.R.id.content);
+
+                  content.setOnApplyWindowInsetsListener((v, insets) -> {
+
+                      int top = insets.getSystemWindowInsetTop();
+                      int bottom = insets.getSystemWindowInsetBottom();
+
+                      View child =
+                              ((ViewGroup) content).getChildAt(0);
+
+                      if (child != null) {
+                          child.setPadding(0, top, 0, bottom);
+                      }
+
+                      return insets;
+                  });
+              }
+
+              private void setupWebView() {
 
                   WebSettings settings = webView.getSettings();
+
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
@@ -177,28 +359,70 @@ jobs:
                   settings.setAllowContentAccess(true);
 
                   CookieManager.getInstance().setAcceptCookie(true);
-
                   CookieManager.getInstance()
-                      .setAcceptThirdPartyCookies(webView, true);
+                          .setAcceptThirdPartyCookies(webView, true);
 
                   webView.setWebViewClient(new WebViewClient() {
+
                       @Override
-                      public void onPageFinished(WebView view, String url) {
-                          loader.setVisibility(View.GONE);
-                          webView.setVisibility(View.VISIBLE);
+                      public void onPageStarted(
+                              WebView view,
+                              String url,
+                              android.graphics.Bitmap favicon
+                      ) {
+
+                          if (!firstLoad) {
+                              pageLoader.setVisibility(View.VISIBLE);
+                          }
+                      }
+
+                      @Override
+                      public void onPageFinished(
+                              WebView view,
+                              String url
+                      ) {
+
+                          if (firstLoad) {
+
+                              firstLoad = false;
+
+                              webView.setVisibility(View.VISIBLE);
+
+                              splash.animate()
+                                      .alpha(0f)
+                                      .setDuration(350)
+                                      .withEndAction(() ->
+                                              splash.setVisibility(View.GONE)
+                                      )
+                                      .start();
+
+                          } else {
+
+                              pageLoader.setVisibility(View.GONE);
+
+                          }
                       }
                   });
-
-                  webView.loadUrl(URL);
               }
 
               @Override
               public void onBackPressed() {
+
                   if (webView.canGoBack()) {
                       webView.goBack();
                   } else {
                       super.onBackPressed();
                   }
+              }
+
+              private int dp(int value) {
+
+                  return (int) (
+                          value *
+                          getResources()
+                                  .getDisplayMetrics()
+                                  .density
+                  );
               }
           }
           EOF
