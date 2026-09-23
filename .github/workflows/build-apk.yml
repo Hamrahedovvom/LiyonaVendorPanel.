@@ -68,8 +68,8 @@ jobs:
                   applicationId 'ir.liyona.vendorpanel'
                   minSdk 23
                   targetSdk 35
-                  versionCode 2
-                  versionName '1.1.0'
+                  versionCode 3
+                  versionName '1.2.0'
               }
 
               compileOptions {
@@ -89,8 +89,8 @@ jobs:
           <resources>
               <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:windowNoTitle">true</item>
-                  <item name="android:statusBarColor">#061D47</item>
-                  <item name="android:navigationBarColor">#061D47</item>
+                  <item name="android:statusBarColor">#FF2D8D</item>
+                  <item name="android:navigationBarColor">#FFFFFF</item>
                   <item name="android:windowLightStatusBar">false</item>
               </style>
           </resources>
@@ -101,17 +101,41 @@ jobs:
           <shape xmlns:android="http://schemas.android.com/apk/res/android"
               android:shape="rectangle">
               <gradient
-                  android:angle="135"
-                  android:startColor="#031B45"
-                  android:centerColor="#0757C8"
-                  android:endColor="#03235E" />
+                  android:angle="270"
+                  android:startColor="#FFF6FB"
+                  android:centerColor="#FFF0F7"
+                  android:endColor="#FFE5F1" />
+          </shape>
+          EOF
+
+          cat > app/src/main/res/drawable/card_bg.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#FFFFFFFF" />
+              <corners android:radius="28dp" />
+              <stroke
+                  android:width="1dp"
+                  android:color="#15FF2D8D" />
+          </shape>
+          EOF
+
+          cat > app/src/main/res/drawable/loader_box_bg.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#F2FFFFFF" />
+              <corners android:radius="24dp" />
+              <stroke
+                  android:width="1dp"
+                  android:color="#18FF2D8D" />
           </shape>
           EOF
 
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
               <application
                   android:allowBackup="true"
@@ -123,7 +147,8 @@ jobs:
 
                   <activity
                       android:name=".MainActivity"
-                      android:exported="true">
+                      android:exported="true"
+                      android:windowSoftInputMode="adjustResize">
 
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -141,12 +166,13 @@ jobs:
 
           import android.app.Activity;
           import android.graphics.Color;
+          import android.net.Uri;
           import android.os.Bundle;
           import android.view.Gravity;
           import android.view.View;
           import android.view.ViewGroup;
-          import android.view.WindowInsets;
           import android.webkit.CookieManager;
+          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
@@ -158,11 +184,10 @@ jobs:
 
           public class MainActivity extends Activity {
 
-              private static final String URL =
-                      "https://liyona.ir/vendor-dashboard/";
+              private static final String URL = "https://liyona.ir/vendor-dashboard/";
 
               private WebView webView;
-              private View splash;
+              private View splashView;
               private View pageLoader;
               private boolean firstLoad = true;
 
@@ -170,18 +195,21 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  getWindow().setStatusBarColor(Color.rgb(6, 29, 71));
-                  getWindow().setNavigationBarColor(Color.rgb(6, 29, 71));
+                  getWindow().setStatusBarColor(Color.parseColor("#FF2D8D"));
+                  getWindow().setNavigationBarColor(Color.WHITE);
 
                   buildUI();
                   setupInsets();
                   setupWebView();
 
-                  webView.loadUrl(URL);
+                  if (savedInstanceState == null) {
+                      webView.loadUrl(URL);
+                  } else {
+                      webView.restoreState(savedInstanceState);
+                  }
               }
 
               private void buildUI() {
-
                   FrameLayout root = new FrameLayout(this);
                   root.setBackgroundColor(Color.WHITE);
 
@@ -198,18 +226,20 @@ jobs:
 
                   pageLoader = createPageLoader();
                   pageLoader.setVisibility(View.GONE);
-
-                  FrameLayout.LayoutParams loaderParams =
-                          new FrameLayout.LayoutParams(dp(150), dp(90));
-
-                  loaderParams.gravity = Gravity.CENTER;
-
-                  root.addView(pageLoader, loaderParams);
-
-                  splash = createSplash();
+                  pageLoader.setAlpha(0f);
 
                   root.addView(
-                          splash,
+                          pageLoader,
+                          new FrameLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.MATCH_PARENT
+                          )
+                  );
+
+                  splashView = createSplash();
+
+                  root.addView(
+                          splashView,
                           new FrameLayout.LayoutParams(
                                   ViewGroup.LayoutParams.MATCH_PARENT,
                                   ViewGroup.LayoutParams.MATCH_PARENT
@@ -220,36 +250,63 @@ jobs:
               }
 
               private View createSplash() {
+                  FrameLayout wrapper = new FrameLayout(this);
+                  wrapper.setBackgroundResource(R.drawable.splash_bg);
 
-                  LinearLayout layout = new LinearLayout(this);
+                  LinearLayout main = new LinearLayout(this);
+                  main.setOrientation(LinearLayout.VERTICAL);
+                  main.setGravity(Gravity.CENTER_HORIZONTAL);
+                  main.setPadding(dp(24), dp(36), dp(24), dp(36));
 
-                  layout.setOrientation(LinearLayout.VERTICAL);
-                  layout.setGravity(Gravity.CENTER);
-                  layout.setPadding(dp(30), dp(30), dp(30), dp(30));
-                  layout.setBackgroundResource(R.drawable.splash_bg);
+                  FrameLayout.LayoutParams mainParams =
+                          new FrameLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.MATCH_PARENT
+                          );
+
+                  View topBar = new View(this);
+                  topBar.setBackgroundColor(Color.parseColor("#FF2D8D"));
+                  FrameLayout.LayoutParams topBarParams =
+                          new FrameLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  dp(68)
+                          );
+                  topBarParams.gravity = Gravity.TOP;
+                  wrapper.addView(topBar, topBarParams);
+
+                  LinearLayout card = new LinearLayout(this);
+                  card.setOrientation(LinearLayout.VERTICAL);
+                  card.setGravity(Gravity.CENTER_HORIZONTAL);
+                  card.setPadding(dp(28), dp(28), dp(28), dp(28));
+                  card.setBackgroundResource(R.drawable.card_bg);
+                  card.setElevation(dp(10));
+
+                  LinearLayout.LayoutParams cardParams =
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          );
+                  cardParams.topMargin = dp(80);
 
                   ImageView logo = new ImageView(this);
                   logo.setImageResource(R.drawable.icon);
                   logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
                   LinearLayout.LayoutParams logoParams =
-                          new LinearLayout.LayoutParams(dp(130), dp(130));
-
-                  logoParams.bottomMargin = dp(25);
-
-                  layout.addView(logo, logoParams);
+                          new LinearLayout.LayoutParams(dp(110), dp(110));
+                  logoParams.bottomMargin = dp(18);
+                  card.addView(logo, logoParams);
 
                   TextView title = new TextView(this);
                   title.setText("پنل فروشندگان لیونا");
-                  title.setTextColor(Color.WHITE);
-                  title.setTextSize(25);
+                  title.setTextColor(Color.parseColor("#1F2430"));
+                  title.setTextSize(24);
                   title.setGravity(Gravity.CENTER);
-
-                  layout.addView(title);
+                  card.addView(title);
 
                   TextView sub = new TextView(this);
-                  sub.setText("مدیریت فروشگاه، ساده و سریع");
-                  sub.setTextColor(0xCCFFFFFF);
+                  sub.setText("مدیریت سفارش‌ها، محصولات و فروشگاه");
+                  sub.setTextColor(Color.parseColor("#8C6F7E"));
                   sub.setTextSize(14);
                   sub.setGravity(Gravity.CENTER);
 
@@ -258,32 +315,51 @@ jobs:
                                   ViewGroup.LayoutParams.WRAP_CONTENT,
                                   ViewGroup.LayoutParams.WRAP_CONTENT
                           );
-
-                  subParams.topMargin = dp(8);
-                  subParams.bottomMargin = dp(30);
-
-                  layout.addView(sub, subParams);
+                  subParams.topMargin = dp(10);
+                  subParams.bottomMargin = dp(24);
+                  card.addView(sub, subParams);
 
                   ProgressBar progress = new ProgressBar(this);
+                  try {
+                      progress.getIndeterminateDrawable()
+                              .setTint(Color.parseColor("#FF2D8D"));
+                  } catch (Exception ignored) {}
 
                   LinearLayout.LayoutParams progressParams =
-                          new LinearLayout.LayoutParams(dp(50), dp(50));
-
-                  progressParams.bottomMargin = dp(15);
-
-                  layout.addView(progress, progressParams);
+                          new LinearLayout.LayoutParams(dp(42), dp(42));
+                  progressParams.bottomMargin = dp(16);
+                  card.addView(progress, progressParams);
 
                   TextView loading = new TextView(this);
-                  loading.setText("در حال ورود به پنل...");
-                  loading.setTextColor(Color.WHITE);
+                  loading.setText("در حال ورود به پنل فروشندگان...");
+                  loading.setTextColor(Color.parseColor("#FF2D8D"));
                   loading.setTextSize(13);
+                  loading.setGravity(Gravity.CENTER);
+                  card.addView(loading);
 
-                  layout.addView(loading);
+                  main.addView(card, cardParams);
+
+                  TextView footer = new TextView(this);
+                  footer.setText("liyona.ir");
+                  footer.setTextColor(Color.parseColor("#C07A97"));
+                  footer.setTextSize(12);
+                  footer.setGravity(Gravity.CENTER);
+
+                  LinearLayout.LayoutParams footerParams =
+                          new LinearLayout.LayoutParams(
+                                  ViewGroup.LayoutParams.WRAP_CONTENT,
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          );
+                  footerParams.topMargin = dp(28);
+
+                  main.addView(footer, footerParams);
+
+                  wrapper.addView(main, mainParams);
 
                   logo.animate()
-                          .scaleX(1.08f)
-                          .scaleY(1.08f)
-                          .alpha(0.8f)
+                          .scaleX(1.07f)
+                          .scaleY(1.07f)
+                          .alpha(0.88f)
                           .setDuration(900)
                           .withEndAction(() ->
                                   logo.animate()
@@ -295,63 +371,69 @@ jobs:
                           )
                           .start();
 
-                  return layout;
+                  return wrapper;
               }
 
               private View createPageLoader() {
+                  FrameLayout overlay = new FrameLayout(this);
+                  overlay.setBackgroundColor(0x99FFFFFF);
 
                   LinearLayout box = new LinearLayout(this);
-
                   box.setOrientation(LinearLayout.VERTICAL);
                   box.setGravity(Gravity.CENTER);
-                  box.setPadding(dp(15), dp(15), dp(15), dp(15));
-                  box.setBackgroundColor(0xEEFFFFFF);
-                  box.setElevation(dp(12));
+                  box.setPadding(dp(22), dp(22), dp(22), dp(22));
+                  box.setBackgroundResource(R.drawable.loader_box_bg);
+                  box.setElevation(dp(10));
 
                   ProgressBar progress = new ProgressBar(this);
+                  try {
+                      progress.getIndeterminateDrawable()
+                              .setTint(Color.parseColor("#FF2D8D"));
+                  } catch (Exception ignored) {}
 
                   LinearLayout.LayoutParams progressParams =
-                          new LinearLayout.LayoutParams(dp(38), dp(38));
-
-                  progressParams.bottomMargin = dp(8);
-
+                          new LinearLayout.LayoutParams(dp(42), dp(42));
+                  progressParams.bottomMargin = dp(10);
                   box.addView(progress, progressParams);
 
                   TextView text = new TextView(this);
-
                   text.setText("در حال بارگذاری...");
-                  text.setTextColor(Color.rgb(3, 27, 69));
-                  text.setTextSize(12);
-
+                  text.setTextColor(Color.parseColor("#6D5562"));
+                  text.setTextSize(13);
+                  text.setGravity(Gravity.CENTER);
                   box.addView(text);
 
-                  return box;
+                  FrameLayout.LayoutParams boxParams =
+                          new FrameLayout.LayoutParams(
+                                  dp(170),
+                                  ViewGroup.LayoutParams.WRAP_CONTENT
+                          );
+                  boxParams.gravity = Gravity.CENTER;
+
+                  overlay.addView(box, boxParams);
+
+                  return overlay;
               }
 
               private void setupInsets() {
-
                   View content = findViewById(android.R.id.content);
 
                   content.setOnApplyWindowInsetsListener((v, insets) -> {
-
                       int top = insets.getSystemWindowInsetTop();
                       int bottom = insets.getSystemWindowInsetBottom();
 
-                      View child =
-                              ((ViewGroup) content).getChildAt(0);
-
-                      if (child != null) {
-                          child.setPadding(0, top, 0, bottom);
+                      if (webView != null) {
+                          webView.setPadding(0, top, 0, bottom);
                       }
 
                       return insets;
                   });
+
+                  content.requestApplyInsets();
               }
 
               private void setupWebView() {
-
                   WebSettings settings = webView.getSettings();
-
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
@@ -359,56 +441,69 @@ jobs:
                   settings.setAllowContentAccess(true);
 
                   CookieManager.getInstance().setAcceptCookie(true);
-                  CookieManager.getInstance()
-                          .setAcceptThirdPartyCookies(webView, true);
+                  CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
                   webView.setWebViewClient(new WebViewClient() {
 
                       @Override
-                      public void onPageStarted(
-                              WebView view,
-                              String url,
-                              android.graphics.Bitmap favicon
-                      ) {
+                      public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                          super.onPageStarted(view, url, favicon);
 
                           if (!firstLoad) {
                               pageLoader.setVisibility(View.VISIBLE);
+                              pageLoader.animate().alpha(1f).setDuration(180).start();
                           }
                       }
 
                       @Override
-                      public void onPageFinished(
-                              WebView view,
-                              String url
-                      ) {
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
 
                           if (firstLoad) {
-
                               firstLoad = false;
-
                               webView.setVisibility(View.VISIBLE);
 
-                              splash.animate()
+                              splashView.animate()
                                       .alpha(0f)
                                       .setDuration(350)
-                                      .withEndAction(() ->
-                                              splash.setVisibility(View.GONE)
-                                      )
+                                      .withEndAction(() -> splashView.setVisibility(View.GONE))
                                       .start();
-
                           } else {
-
-                              pageLoader.setVisibility(View.GONE);
-
+                              pageLoader.animate()
+                                      .alpha(0f)
+                                      .setDuration(180)
+                                      .withEndAction(() -> pageLoader.setVisibility(View.GONE))
+                                      .start();
                           }
+                      }
+
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                          Uri uri = request.getUrl();
+                          String scheme = uri.getScheme();
+                          return !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+                      }
+
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                          Uri uri = Uri.parse(url);
+                          String scheme = uri.getScheme();
+                          return !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
                       }
                   });
               }
 
               @Override
-              public void onBackPressed() {
+              protected void onSaveInstanceState(Bundle outState) {
+                  if (webView != null) {
+                      webView.saveState(outState);
+                  }
+                  super.onSaveInstanceState(outState);
+              }
 
-                  if (webView.canGoBack()) {
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) {
                       webView.goBack();
                   } else {
                       super.onBackPressed();
@@ -416,13 +511,7 @@ jobs:
               }
 
               private int dp(int value) {
-
-                  return (int) (
-                          value *
-                          getResources()
-                                  .getDisplayMetrics()
-                                  .density
-                  );
+                  return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
               }
           }
           EOF
